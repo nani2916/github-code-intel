@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GitHub Code Intelligence</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d1117;
+    --bg2: #161b22;
+    --bg3: #21262d;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text2: #8b949e;
+    --purple: #a371f7;
+    --purple-bg: #1f1535;
+    --green: #3fb950;
+    --green-bg: #0d2c18;
+    --blue: #58a6ff;
+    --blue-bg: #0c2a47;
+    --radius: 8px;
+    --font-mono: 'Cascadia Code', 'Fira Code', monospace;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--bg2);
+  }
+  .logo {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, #a371f7, #58a6ff);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0;
+  }
+  header h1 { font-size: 15px; font-weight: 600; color: var(--text); }
+  header p  { font-size: 12px; color: var(--text2); margin-top: 1px; }
+  .badge {
+    margin-left: auto;
+    background: var(--purple-bg);
+    color: var(--purple);
+    border: 1px solid var(--purple);
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  /* ── Layout ── */
+  .layout { display: grid; grid-template-columns: 280px 1fr; height: calc(100vh - 57px); }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .sidebar-section { padding: 16px; border-bottom: 1px solid var(--border); }
+  .sidebar-section label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+  .repo-input {
+    width: 100%;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 10px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-family: var(--font-mono);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .repo-input:focus { border-color: var(--purple); }
+  .repo-input::placeholder { color: var(--text2); }
+
+  .btn {
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-top: 8px;
+  }
+  .btn-primary {
+    background: var(--purple);
+    border-color: var(--purple);
+    color: #fff;
+  }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-secondary {
+    background: var(--bg3);
+    color: var(--text);
+  }
+  .btn-secondary:hover { border-color: var(--purple); color: var(--purple); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .status-bar {
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    margin-top: 8px;
+    display: none;
+  }
+  .status-bar.show { display: block; }
+  .status-bar.loading { background: var(--blue-bg); color: var(--blue); }
+  .status-bar.success { background: var(--green-bg); color: var(--green); }
+  .status-bar.error   { background: #2c1515; color: #f85149; }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .stat-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    text-align: center;
+  }
+  .stat-card .num { font-size: 18px; font-weight: 600; color: var(--purple); }
+  .stat-card .lbl { font-size: 10px; color: var(--text2); margin-top: 2px; }
+
+  .lang-pills {
+    display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px;
+  }
+  .pill {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+  }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    padding: 0 16px;
+  }
+  .tab {
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--text2);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    background: none;
+    border-left: none; border-right: none; border-top: none;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--purple); border-bottom-color: var(--purple); }
+
+  /* ── Main panel ── */
+  .main { display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ── Chat panel ── */
+  .chat-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .message { display: flex; flex-direction: column; gap: 6px; max-width: 90%; }
+  .message.user { align-self: flex-end; align-items: flex-end; }
+  .message.bot  { align-self: flex-start; }
+  .msg-label { font-size: 11px; color: var(--text2); font-weight: 500; }
+  .msg-bubble {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+  .message.user .msg-bubble {
+    background: var(--purple-bg);
+    border-color: var(--purple);
+    color: var(--text);
+  }
+  .sources {
+    display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;
+  }
+  .source-tag {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-family: var(--font-mono);
+  }
+
+  .chat-input-area {
+    border-top: 1px solid var(--border);
+    padding: 14px 20px;
+    background: var(--bg2);
+    display: flex;
+    gap: 10px;
+  }
+  .chat-input {
+    flex: 1;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    outline: none;
+    resize: none;
+    font-family: inherit;
+    transition: border-color 0.15s;
+    min-height: 42px;
+    max-height: 120px;
+  }
+  .chat-input:focus { border-color: var(--purple); }
+  .send-btn {
+    background: var(--purple);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    padding: 0 18px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    flex-shrink: 0;
+  }
+  .send-btn:hover { opacity: 0.85; }
+  .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── Summary panel ── */
+  .summary-panel {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+  }
+  .summary-placeholder {
+    text-align: center;
+    color: var(--text2);
+    padding: 60px 20px;
+  }
+  .summary-placeholder .icon { font-size: 40px; margin-bottom: 12px; }
+  .summary-content {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  /* ── Markdown rendering ── */
+  .md h1, .md h2, .md h3 {
+    color: var(--text);
+    font-weight: 600;
+    margin: 16px 0 8px;
+    line-height: 1.3;
+  }
+  .md h1 { font-size: 18px; }
+  .md h2 { font-size: 15px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  .md h3 { font-size: 13px; }
+  .md p  { margin: 8px 0; color: var(--text); }
+  .md ul, .md ol { padding-left: 20px; margin: 8px 0; }
+  .md li { margin: 4px 0; }
+  .md code {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--purple);
+  }
+  .md pre {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    overflow-x: auto;
+    margin: 10px 0;
+  }
+  .md pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--text);
+    font-size: 12px;
+  }
+  .md strong { color: var(--text); font-weight: 600; }
+  .md blockquote {
+    border-left: 3px solid var(--purple);
+    padding-left: 12px;
+    color: var(--text2);
+    margin: 8px 0;
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--purple);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty-chat {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    color: var(--text2);
+    padding: 40px;
+  }
+  .empty-chat .big-icon { font-size: 48px; }
+  .empty-chat p { text-align: center; max-width: 320px; font-size: 13px; }
+  .suggestion-chips {
+    display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 360px;
+  }
+  .chip {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 12px;
+    text-align: left;
+    transition: border-color 0.15s;
+  }
+  .chip:hover { border-color: var(--purple); color: var(--purple); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">⚡</div>
+  <div>
+    <h1>GitHub Code Intelligence</h1>
+    <p>RAG-powered code understanding</p>
+  </div>
+
+</header>
+
+<div class="layout">
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <label>Repository</label>
+      <input class="repo-input" id="repoInput" type="text"
+             placeholder="owner/repo" value="" />
+      <button class="btn btn-primary" onclick="ingestRepo()" id="ingestBtn">
+        Ingest repo
+      </button>
+      <button class="btn btn-secondary" onclick="loadStats()" id="statsBtn">
+        Check index stats
+      </button>
+      <div class="status-bar" id="statusBar"></div>
+    </div>
+
+    <div class="sidebar-section" id="statsSection" style="display:none">
+      <label>Index stats</label>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="num" id="statFiles">—</div>
+          <div class="lbl">Files</div>
+        </div>
+        <div class="stat-card">
+          <div class="num" id="statChunks">—</div>
+          <div class="lbl">Chunks</div>
+        </div>
+      </div>
+      <div class="lang-pills" id="langPills"></div>
+    </div>
+
+    <div class="sidebar-section">
+      <label>Common questions</label>
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <button class="chip" onclick="setQ('What does this project do and who is it for?')">What does this project do and who is it for?</button>
+        <button class="chip" onclick="setQ('How do I set up and run this project locally?')">How do I set up and run this project locally?</button>
+        <button class="chip" onclick="setQ('What are the main files I should look at first?')">What are the main files I should look at first?</button>
+        <button class="chip" onclick="setQ('What APIs or external services does this project use?')">What APIs or external services does this use?</button>
+        <button class="chip" onclick="setQ('How is the folder structure organized?')">How is the folder structure organized?</button>
+        <button class="chip" onclick="setQ('What are the most important functions or classes?')">What are the most important functions or classes?</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <div class="main">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('chat', this)">Chat with code</button>
+      <button class="tab" onclick="switchTab('summary', this)">Auto summary</button>
+    </div>
+
+    <!-- Chat tab -->
+    <div id="chatTab" class="chat-panel">
+      <div class="messages" id="messages">
+        <div class="empty-chat" id="emptyState">
+          <div class="big-icon">💬</div>
+          <p>Ingest a GitHub repo, then ask any question about the code.</p>
+          <p style="font-size:11px; color: #484f58;">Try: <em>"Where is the payment logic?"</em> or <em>"How does auth work?"</em></p>
+        </div>
+      </div>
+      <div class="chat-input-area">
+        <textarea class="chat-input" id="chatInput"
+          placeholder="Ask anything about the code..."
+          rows="1"
+          onkeydown="handleKey(event)"
+          oninput="autoResize(this)"></textarea>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()">Send</button>
+      </div>
+    </div>
+
+    <!-- Summary tab -->
+    <div id="summaryTab" style="display:none;" class="chat-panel">
+      <div class="summary-panel">
+        <div class="summary-placeholder" id="summaryPlaceholder">
+          <div class="icon">📄</div>
+          <p>Ingest a repo and click <strong>Generate Summary</strong> to get a plain-English explanation of the entire codebase.</p>
+          <button class="btn btn-primary" style="width:auto; margin:16px auto 0; display:block; padding: 8px 24px;"
+                  onclick="getSummary()">Generate summary</button>
+        </div>
+        <div class="summary-content md" id="summaryContent" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+
+function getRepo() {
+  return document.getElementById('repoInput').value.trim();
+}
+
+function setStatus(msg, type) {
+  const bar = document.getElementById('statusBar');
+  bar.textContent = msg;
+  bar.className = `status-bar show ${type}`;
+}
+
+function clearStatus() {
+  document.getElementById('statusBar').className = 'status-bar';
+}
+
+async function ingestRepo() {
+  const repo = getRepo();
+  if (!repo) { setStatus('Enter a repo first (e.g. facebook/react)', 'error'); return; }
+
+  const btn = document.getElementById('ingestBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Ingesting...';
+  setStatus('Fetching files from GitHub...', 'loading');
+
+  try {
+    const r = await fetch(`${API}/ingest`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({repo}),
+    });
+    if (!r.ok) {
+      const err = await r.json();
+      throw new Error(err.detail || 'Ingestion failed');
+    }
+    setStatus('Ingestion started! This takes 30-60s for large repos. Check stats when done.', 'success');
+    setTimeout(loadStats, 5000);
+  } catch(e) {
+    setStatus(e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Ingest repo';
+  }
+}
+
+async function loadStats() {
+  const repo = getRepo();
+  if (!repo) return;
+
+  try {
+    const r = await fetch(`${API}/stats/${repo.replace('/', '/')}`);
+    if (!r.ok) return;
+    const data = await r.json();
+
+    document.getElementById('statsSection').style.display = 'block';
+    document.getElementById('statFiles').textContent = data.files ?? '—';
+    document.getElementById('statChunks').textContent = data.chunks ?? '—';
+
+    const pills = document.getElementById('langPills');
+    pills.innerHTML = (data.languages || [])
+      .map(l => `<span class="pill">${l}</span>`).join('');
+
+    if (data.chunks > 0) {
+      setStatus(`Ready — ${data.chunks} chunks indexed across ${data.files} files`, 'success');
+    }
+  } catch(e) {}
+}
+
+function setQ(q) {
+  document.getElementById('chatInput').value = q;
+  document.getElementById('chatInput').focus();
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function renderMarkdown(text) {
+  return text
+    .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
+      `<pre><code>${escHtml(code.trim())}</code></pre>`)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+    .replace(/^\* (.+)$/gm, '<li>$1</li>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/^(?!<[hup]|<li|<pre|<block)(.+)$/gm, '<p>$1</p>');
+}
+
+function escHtml(t) {
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function addMessage(role, content, sources) {
+  const empty = document.getElementById('emptyState');
+  if (empty) empty.remove();
+
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = `message ${role}`;
+
+  const label = document.createElement('div');
+  label.className = 'msg-label';
+  label.textContent = role === 'user' ? 'You' : 'Claude';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble md';
+  bubble.innerHTML = renderMarkdown(content);
+
+  div.appendChild(label);
+  div.appendChild(bubble);
+
+  if (sources && sources.length) {
+    const s = document.createElement('div');
+    s.className = 'sources';
+    sources.slice(0, 5).forEach(src => {
+      const tag = document.createElement('span');
+      tag.className = 'source-tag';
+      tag.textContent = src.path;
+      s.appendChild(tag);
+    });
+    div.appendChild(s);
+  }
+
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+async function sendMessage() {
+  const input = document.getElementById('chatInput');
+  const question = input.value.trim();
+  const repo = getRepo();
+
+  if (!question) return;
+  if (!repo) { setStatus('Enter a repo first', 'error'); return; }
+
+  const btn = document.getElementById('sendBtn');
+  input.value = '';
+  input.style.height = 'auto';
+  btn.disabled = true;
+
+  addMessage('user', question);
+
+  // Create the bot bubble immediately — text streams into it
+  const empty = document.getElementById('emptyState');
+  if (empty) empty.remove();
+  const msgs = document.getElementById('messages');
+
+  const msgDiv = document.createElement('div');
+  msgDiv.className = 'message bot';
+  const label = document.createElement('div');
+  label.className = 'msg-label';
+  label.textContent = 'Claude';
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble md';
+  bubble.innerHTML = '<span class="spinner"></span> Searching code...';
+  msgDiv.appendChild(label);
+  msgDiv.appendChild(bubble);
+  msgs.appendChild(msgDiv);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  let fullText = '';
+  let sources = [];
+
+  try {
+    const r = await fetch(`${API}/ask/stream`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({repo, question}),
+    });
+
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    bubble.innerHTML = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value);
+      const lines = chunk.split('\n');
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6);
+
+        if (data === '[DONE]') break;
+
+        if (data.startsWith('[SOURCES]')) {
+          sources = JSON.parse(data.slice(10));
+          continue;
+        }
+
+        // Unescape newlines and append text
+        fullText += data.replace(/\\n/g, '\n');
+        bubble.innerHTML = renderMarkdown(fullText);
+        msgs.scrollTop = msgs.scrollHeight;
+      }
+    }
+
+    // Add sources below the bubble
+    if (sources.length) {
+      const s = document.createElement('div');
+      s.className = 'sources';
+      sources.slice(0, 5).forEach(src => {
+        const tag = document.createElement('span');
+        tag.className = 'source-tag';
+        tag.textContent = src.path;
+        s.appendChild(tag);
+      });
+      msgDiv.appendChild(s);
+    }
+
+  } catch(e) {
+    bubble.innerHTML = 'Something went wrong. Is the server running?';
+  } finally {
+    btn.disabled = false;
+    input.focus();
+  }
+}
+
+async function getSummary() {
+  const repo = getRepo();
+  if (!repo) { alert('Enter a repo first'); return; }
+
+  const placeholder = document.getElementById('summaryPlaceholder');
+  const content = document.getElementById('summaryContent');
+  placeholder.innerHTML = '<span class="spinner"></span> Generating response with RAG Intelligence...';
+
+  try {
+    const r = await fetch(`${API}/summary/${repo}`);
+    const data = await r.json();
+    placeholder.style.display = 'none';
+    content.style.display = 'block';
+    content.innerHTML = renderMarkdown(data.summary);
+  } catch(e) {
+    placeholder.innerHTML = '<p style="color:#f85149">Failed to generate summary. Is the repo indexed?</p>';
+  }
+}
+
+function switchTab(tab, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('chatTab').style.display = tab === 'chat' ? 'flex' : 'none';
+  document.getElementById('summaryTab').style.display = tab === 'summary' ? 'flex' : 'none';
+}
+
+// Auto-load stats if repo is pre-filled
+window.addEventListener('load', () => {
+  const repo = getRepo();
+  if (repo) loadStats();
+});
+</script>
+</body>
+</html>
