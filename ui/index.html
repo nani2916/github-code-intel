@@ -428,6 +428,7 @@
     <div class="tabs">
       <button class="tab active" onclick="switchTab('chat', this)">Chat with code</button>
       <button class="tab" onclick="switchTab('summary', this)">Auto summary</button>
+      <button class="tab" onclick="switchTab('suggestions', this)">Suggestions</button>
     </div>
 
     <!-- Chat tab -->
@@ -459,6 +460,18 @@
                   onclick="getSummary()">Generate summary</button>
         </div>
         <div class="summary-content md" id="summaryContent" style="display:none"></div>
+      </div>
+    </div>
+  <!-- Suggestions tab -->
+    <div id="suggestionsTab" style="display:none;" class="chat-panel">
+      <div class="summary-panel">
+        <div class="summary-placeholder" id="suggestionsPlaceholder">
+          <div class="icon">✨</div>
+          <p>Ingest a repo and click <strong>Generate Suggestions</strong> to get related papers, similar projects, YouTube videos and improvement ideas.</p>
+          <button class="btn btn-primary" style="width:auto; margin:16px auto 0; display:block; padding: 8px 24px;"
+                  onclick="getSuggestions()">Generate suggestions</button>
+        </div>
+        <div id="suggestionsContent" style="display:none; padding: 0 4px;"></div>
       </div>
     </div>
   </div>
@@ -724,6 +737,116 @@ function switchTab(tab, el) {
   el.classList.add('active');
   document.getElementById('chatTab').style.display = tab === 'chat' ? 'flex' : 'none';
   document.getElementById('summaryTab').style.display = tab === 'summary' ? 'flex' : 'none';
+  document.getElementById('suggestionsTab').style.display = tab === 'suggestions' ? 'flex' : 'none';
+}
+
+async function getSuggestions() {
+  const repo = getRepo();
+  if (!repo) { alert('Enter a repo first'); return; }
+
+  const placeholder = document.getElementById('suggestionsPlaceholder');
+  const content = document.getElementById('suggestionsContent');
+  placeholder.innerHTML = '<span class="spinner"></span> Analysing tech stack with RAG Intelligence...';
+  content.style.display = 'none';
+
+  try {
+    const r = await fetch(`${API}/suggestions`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({repo}),
+    });
+    const data = await r.json();
+
+    if (data.error && !data.papers) {
+      placeholder.innerHTML = `<p style="color:#f85149">${data.error}</p>`;
+      return;
+    }
+
+    placeholder.style.display = 'none';
+    content.style.display = 'block';
+    content.innerHTML = renderSuggestions(data);
+  } catch(e) {
+    placeholder.innerHTML = '<p style="color:#f85149">Something went wrong. Is the repo indexed?</p>';
+  }
+}
+
+function renderSuggestions(data) {
+  let html = '';
+
+  // Tech stack pills
+  if (data.tech_stack && data.tech_stack.length) {
+    html += `<div style="margin-bottom:20px;">
+      <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Detected Tech Stack</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        ${data.tech_stack.map(t => `<span style="background:var(--purple-bg);border:1px solid var(--purple);color:var(--purple);padding:3px 10px;border-radius:20px;font-size:12px;">${t}</span>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  // Research papers
+  if (data.papers && data.papers.length) {
+    html += `<div style="margin-bottom:24px;">
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:12px;">📄 Related Research Papers</div>
+      ${data.papers.map(p => `
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:8px;">
+          <a href="${p.url}" target="_blank" style="color:var(--blue);font-weight:600;font-size:13px;text-decoration:none;">${p.title}</a>
+          <div style="color:var(--text2);font-size:11px;margin:4px 0;">${p.authors || ''}</div>
+          <div style="color:var(--text);font-size:12px;margin:6px 0;">${p.summary}</div>
+          <div style="background:var(--bg3);border-left:3px solid var(--purple);padding:6px 10px;border-radius:0 4px 4px 0;font-size:11px;color:var(--text2);margin-top:6px;">💡 ${p.relevance}</div>
+        </div>`).join('')}
+    </div>`;
+  }
+
+  // Similar projects
+  if (data.similar_projects && data.similar_projects.length) {
+    html += `<div style="margin-bottom:24px;">
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:12px;">🔗 Similar Projects (Different Approaches)</div>
+      ${data.similar_projects.map(p => `
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:8px;">
+          <a href="${p.url}" target="_blank" style="color:var(--blue);font-weight:600;font-size:13px;text-decoration:none;">${p.name}</a>
+          <div style="color:var(--text);font-size:12px;margin:6px 0;">${p.description}</div>
+          <div style="background:var(--green-bg);border-left:3px solid var(--green);padding:6px 10px;border-radius:0 4px 4px 0;font-size:11px;color:var(--green);margin-top:6px;">↔ Different approach: ${p.difference}</div>
+        </div>`).join('')}
+    </div>`;
+  }
+
+  // YouTube videos
+  if (data.videos && data.videos.length) {
+    html += `<div style="margin-bottom:24px;">
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:12px;">🎥 YouTube Videos</div>
+      ${data.videos.map(v => `
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:8px;display:flex;gap:12px;align-items:flex-start;">
+          <div style="background:#ff0000;border-radius:6px;padding:8px 10px;font-size:18px;flex-shrink:0;">▶</div>
+          <div>
+            <a href="${v.url}" target="_blank" style="color:var(--blue);font-weight:600;font-size:13px;text-decoration:none;">${v.title}</a>
+            <div style="color:var(--text2);font-size:11px;margin:3px 0;">${v.channel || ''}</div>
+            <div style="color:var(--text);font-size:12px;margin-top:4px;">${v.why_watch}</div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+  }
+
+  // Improvement ideas
+  if (data.improvement_ideas && data.improvement_ideas.length) {
+    const diffColor = {'Easy':'var(--green)','Medium':'#e3b341','Hard':'#f85149'};
+    const impColor = {'High':'var(--green)','Medium':'#e3b341','Low':'var(--text2)'};
+    html += `<div style="margin-bottom:24px;">
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:12px;">💡 Ideas to Improve This Project</div>
+      ${data.improvement_ideas.map(i => `
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:8px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <span style="font-weight:600;font-size:13px;color:var(--text);">${i.title}</span>
+            <div style="display:flex;gap:6px;">
+              <span style="font-size:10px;padding:2px 8px;border-radius:20px;border:1px solid;color:${diffColor[i.difficulty]||'var(--text2)'};border-color:${diffColor[i.difficulty]||'var(--border)'};">${i.difficulty}</span>
+              <span style="font-size:10px;padding:2px 8px;border-radius:20px;border:1px solid;color:${impColor[i.impact]||'var(--text2)'};border-color:${impColor[i.impact]||'var(--border)'};">Impact: ${i.impact}</span>
+            </div>
+          </div>
+          <div style="color:var(--text);font-size:12px;line-height:1.6;">${i.description}</div>
+        </div>`).join('')}
+    </div>`;
+  }
+
+  return html;
 }
 
 // Auto-load stats if repo is pre-filled

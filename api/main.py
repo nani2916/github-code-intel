@@ -25,6 +25,7 @@ from ingestion.ingestor import ingest_repo
 from ingestion.vector_store import get_repo_stats, list_indexed_repos
 from retrieval.summariser import generate_summary, generate_pr_comment
 from retrieval.qa_engine import answer_question, answer_question_stream
+from retrieval.suggestions import generate_suggestions
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -41,6 +42,9 @@ class IngestRequest(BaseModel):
 class AskRequest(BaseModel):
     repo: str       # "owner/repo"
     question: str
+
+class SuggestRequest(BaseModel):
+    repo: str       # "owner/repo" 
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -109,6 +113,13 @@ async def stats(owner: str, repo_name: str):
 @app.get("/repos")
 async def repos():
     return {"repos": list_indexed_repos()}
+
+
+@app.post("/suggestions")
+async def suggestions(req: SuggestRequest):
+    """Generate suggestions: papers, similar projects, videos, improvement ideas."""
+    result = await generate_suggestions(repo=req.repo)
+    return result
 
 
 @app.post("/webhook/github")
